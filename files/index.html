@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Meeting Rooms — Painel de Operações</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="config.js"></script>
+<style>
+  :root {
+    --bg: #f5f5f3;
+    --surface: #ffffff;
+    --surface2: #f0efeb;
+    --border: rgba(0,0,0,0.1);
+    --border-strong: rgba(0,0,0,0.18);
+    --text: #1a1a18;
+    --text2: #5a5a56;
+    --text3: #909088;
+    --accent: #2563eb;
+    --accent-bg: #eff6ff;
+    --accent-text: #1d4ed8;
+    --success: #16a34a;
+    --success-bg: #f0fdf4;
+    --warning: #b45309;
+    --warning-bg: #fffbeb;
+    --danger: #dc2626;
+    --danger-bg: #fef2f2;
+    --radius: 8px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18;
+      --surface: #242422;
+      --surface2: #2e2e2c;
+      --border: rgba(255,255,255,0.1);
+      --border-strong: rgba(255,255,255,0.18);
+      --text: #e8e8e4;
+      --text2: #a0a09a;
+      --text3: #6a6a64;
+      --accent-bg: #1e3a6e;
+      --accent-text: #93c5fd;
+      --success-bg: #052e16;
+      --warning-bg: #292015;
+      --danger-bg: #2d0a0a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+
+  /* ── Auth screen ── */
+  #auth-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; gap: 1.5rem; padding: 2rem; }
+  #auth-screen h1 { font-size: 22px; font-weight: 600; }
+  #auth-screen p { color: var(--text2); font-size: 14px; text-align: center; max-width: 320px; }
+  .btn-google { display: flex; align-items: center; gap: 10px; background: var(--surface); border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 10px 20px; font-size: 14px; font-weight: 500; cursor: pointer; color: var(--text); transition: background .15s; }
+  .btn-google:hover { background: var(--surface2); }
+  .btn-google svg { width: 20px; height: 20px; }
+
+  /* ── App layout ── */
+  #app { display: none; flex-direction: column; min-height: 100vh; }
+  #app.visible { display: flex; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 1.25rem; display: flex; align-items: center; gap: 12px; height: 52px; position: sticky; top: 0; z-index: 10; }
+  header h1 { font-size: 15px; font-weight: 600; flex: 1; }
+  .user-chip { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--text2); }
+  .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--accent-bg); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; overflow: hidden; }
+  .avatar img { width: 100%; height: 100%; object-fit: cover; }
+  main { flex: 1; padding: 1.25rem; max-width: 1100px; width: 100%; margin: 0 auto; }
+
+  /* ── Metrics ── */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: .7rem 1rem; }
+  .metric-val { font-size: 24px; font-weight: 600; line-height: 1; }
+  .metric-lbl { font-size: 11px; color: var(--text3); margin-top: 3px; }
+
+  /* ── Alert banner ── */
+  .alert-banner { background: var(--danger-bg); border: 1px solid #fca5a5; border-radius: var(--radius); padding: 9px 14px; font-size: 13px; color: var(--danger); margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+
+  /* ── Notification bar ── */
+  .notif-bar { background: var(--warning-bg); border: 1px solid #fcd34d; border-radius: var(--radius); padding: 8px 14px; font-size: 13px; color: var(--warning); margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+  .notif-bar button { margin-left: auto; font-size: 11px; padding: 3px 10px; border-radius: 6px; border: 1px solid var(--warning); background: transparent; color: var(--warning); cursor: pointer; font-weight: 500; }
+
+  /* ── Toolbar ── */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
+  .toolbar input, .toolbar select { font-size: 13px; padding: 6px 10px; height: 34px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); outline: none; }
+  .toolbar input { flex: 1; min-width: 160px; }
+  .toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+  .btn { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; padding: 6px 14px; height: 34px; border-radius: var(--radius); border: 1px solid var(--border-strong); background: transparent; color: var(--text); cursor: pointer; transition: background .12s; white-space: nowrap; }
+  .btn:hover { background: var(--surface2); }
+  .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .btn-primary:hover { opacity: .9; }
+  .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+  .btn-success:hover { opacity: .9; }
+  .btn-sm { font-size: 12px; padding: 4px 10px; height: 28px; }
+
+  /* ── Form card ── */
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 480px) { .form-grid { grid-template-columns: 1fr; } }
+  .field label { display: block; font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+  .field input, .field select, .field textarea { width: 100%; font-size: 13px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface2); color: var(--text); outline: none; }
+  .field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); background: var(--surface); }
+  .field textarea { resize: vertical; min-height: 68px; line-height: 1.5; }
+  .field-full { grid-column: 1 / -1; }
+
+  /* ── Table ── */
+  .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { font-size: 11px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; padding: 9px 12px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; background: var(--surface2); }
+  td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.data-row { cursor: pointer; transition: background .1s; }
+  tr.data-row:hover td { background: var(--accent-bg); }
+  tr.data-row.sel td { background: var(--accent-bg); }
+
+  /* ── Pills ── */
+  .pill { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 20px; white-space: nowrap; }
+  .pill-idle  { background: var(--accent-bg); color: var(--accent-text); }
+  .pill-maint { background: var(--warning-bg); color: var(--warning); }
+  .pill-check { background: var(--danger-bg); color: var(--danger); }
+  .pill-done  { background: var(--success-bg); color: var(--success); }
+
+  /* ── Countdown ── */
+  .cd { font-size: 12px; font-weight: 600; }
+  .cd-ok   { color: var(--success); }
+  .cd-warn { color: var(--warning); }
+  .cd-late { color: var(--danger); }
+
+  /* ── Detail panel ── */
+  .detail { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; margin-top: 1.25rem; }
+  .detail-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 1rem; gap: 8px; }
+  .detail-title { font-size: 16px; font-weight: 600; }
+  .detail-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .progress-bar { height: 5px; background: var(--surface2); border-radius: 3px; overflow: hidden; margin: .5rem 0 1rem; }
+  .progress-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+  .action-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1rem; }
+  .divider { border: none; border-top: 1px solid var(--border); margin: 1rem 0; }
+  .notes-list { display: flex; flex-direction: column; gap: 7px; max-height: 200px; overflow-y: auto; margin-top: .5rem; }
+  .note-item { background: var(--surface2); border-radius: var(--radius); padding: 8px 10px; font-size: 13px; line-height: 1.4; }
+  .note-meta { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .note-input-row { display: flex; gap: 7px; }
+  .note-input-row input { flex: 1; font-size: 13px; padding: 7px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--surface2); color: var(--text); outline: none; }
+  .note-input-row input:focus { border-color: var(--accent); background: var(--surface); }
+
+  /* ── Teams msg ── */
+  .teams-box { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; font-size: 12px; font-family: monospace; line-height: 1.6; color: var(--text2); white-space: pre-wrap; word-break: break-word; margin-top: .5rem; }
+
+  /* ── Empty state ── */
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text3); }
+  .empty i { font-size: 40px; display: block; margin-bottom: .75rem; }
+  .empty p { font-size: 13px; color: var(--text2); margin-top: 4px; }
+
+  /* ── Spinner ── */
+  .spinner { width: 36px; height: 36px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; margin: 3rem auto; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .tag { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; padding: 2px 8px; border-radius: 20px; background: var(--accent-bg); color: var(--accent-text); font-weight: 500; }
+</style>
+</head>
+<body>
+
+<!-- ── Auth ── -->
+<div id="auth-screen">
+  <i class="ti ti-door" style="font-size:48px;color:var(--accent)"></i>
+  <h1>Meeting Rooms — Suporte</h1>
+  <p>Painel de gestão de tickets e manutenção de salas de reunião.</p>
+  <button class="btn-google" onclick="signIn()">
+    <svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+    Entrar com Google
+  </button>
+</div>
+
+<!-- ── App ── -->
+<div id="app">
+  <header>
+    <i class="ti ti-door" style="font-size:20px;color:var(--accent)"></i>
+    <h1>Meeting Rooms</h1>
+    <div id="notif-icon" style="display:none">
+      <button class="btn btn-sm" onclick="requestNotifPermission()" title="Ativar alertas">
+        <i class="ti ti-bell"></i> Ativar alertas
+      </button>
+    </div>
+    <div class="user-chip">
+      <div class="avatar" id="user-avatar"></div>
+      <span id="user-name"></span>
+      <button class="btn btn-sm" onclick="signOut()" title="Sair"><i class="ti ti-logout"></i></button>
+    </div>
+  </header>
+
+  <main>
+    <div id="notif-bar" class="notif-bar" style="display:none">
+      <i class="ti ti-bell"></i>
+      <span>Ative as notificações do navegador para receber alertas quando um prazo vencer.</span>
+      <button onclick="requestNotifPermission()">Ativar</button>
+    </div>
+
+    <div id="alert-banner" class="alert-banner" style="display:none">
+      <i class="ti ti-alert-triangle"></i>
+      <span id="alert-text"></span>
+    </div>
+
+    <div class="metrics" id="metrics"></div>
+
+    <div class="toolbar">
+      <input type="text" id="search" placeholder="Buscar sala, ticket, analista…" oninput="applyFilters()">
+      <select id="filter-status" onchange="applyFilters()">
+        <option value="">Todos os status</option>
+        <option value="idle">Aguardando</option>
+        <option value="maint">Em manutenção</option>
+        <option value="check">Check pendente</option>
+        <option value="done">Concluída</option>
+      </select>
+      <select id="filter-analyst" onchange="applyFilters()">
+        <option value="">Todos os analistas</option>
+      </select>
+      <button class="btn btn-primary" onclick="toggleForm()">
+        <i class="ti ti-plus"></i> Novo ticket
+      </button>
+    </div>
+
+    <!-- Form -->
+    <div id="form-card" class="form-card" style="display:none">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+        <span style="font-weight:600;font-size:14px"><i class="ti ti-plus" style="margin-right:5px"></i>Novo ticket de sala</span>
+        <button class="btn btn-sm" onclick="toggleForm()"><i class="ti ti-x"></i></button>
+      </div>
+      <div class="form-grid">
+        <div class="field">
+          <label>Nome da sala</label>
+          <input type="text" id="f-sala" placeholder="ex: Sala Brasília">
+        </div>
+        <div class="field">
+          <label>Número do ticket</label>
+          <input type="text" id="f-ticket" placeholder="ex: TK-00142">
+        </div>
+        <div class="field">
+          <label>Analista responsável</label>
+          <input type="text" id="f-analista" placeholder="Nome do analista">
+        </div>
+        <div class="field">
+          <label>Tempo estimado (horas)</label>
+          <input type="number" id="f-horas" value="2" min="1" max="24">
+        </div>
+        <div class="field field-full">
+          <label>Descrição do problema</label>
+          <textarea id="f-desc" placeholder="Descreva o que será feito nesta sala…"></textarea>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:.75rem">
+        <button class="btn" onclick="toggleForm()">Cancelar</button>
+        <button class="btn btn-primary" onclick="createTicket()"><i class="ti ti-check"></i> Criar ticket</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div id="table-area">
+      <div class="spinner"></div>
+    </div>
+
+    <!-- Detail -->
+    <div id="detail-area"></div>
+  </main>
+</div>
+
+<script>
+// ── Firebase init ──
+function isFirebaseConfigured(config) {
+  return config && Object.values(config).every(value => value && value !== 'COLE_AQUI');
+}
+
+if (!isFirebaseConfigured(window.FIREBASE_CONFIG)) {
+  document.getElementById('auth-screen').innerHTML = `
+    <i class="ti ti-settings" style="font-size:48px;color:var(--warning)"></i>
+    <h1>Configuração pendente</h1>
+    <p>Preencha o arquivo <b>config.js</b> com as chaves do Firebase antes de usar o painel.</p>
+  `;
+  throw new Error('Firebase nao configurado: preencha files/config.js.');
+}
+
+firebase.initializeApp(window.FIREBASE_CONFIG);
+const db   = firebase.firestore();
+const auth = firebase.auth();
+
+// ── State ──
+let tickets    = [];
+let filtered   = [];
+let selId      = null;
+let noteInput  = '';
+let swReg      = null;
+let unsubscribe = null;
+
+// ── Auth ──
+function signIn() {
+  const p = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(p).catch(e => alert('Erro ao entrar: ' + e.message));
+}
+function signOut() {
+  if (unsubscribe) unsubscribe();
+  auth.signOut();
+}
+
+auth.onAuthStateChanged(user => {
+  document.getElementById('auth-screen').style.display = user ? 'none' : 'flex';
+  const app = document.getElementById('app');
+  if (user) {
+    app.classList.add('visible');
+    const av = document.getElementById('user-avatar');
+    if (user.photoURL) av.innerHTML = `<img src="${user.photoURL}" alt="">`;
+    else av.textContent = user.displayName?.charAt(0) || '?';
+    document.getElementById('user-name').textContent = user.displayName?.split(' ')[0] || user.email;
+    initApp();
+  } else {
+    app.classList.remove('visible');
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+  }
+});
+
+// ── Init ──
+function initApp() {
+  registerSW();
+  listenTickets();
+  checkNotifPermission();
+  setInterval(checkDeadlines, 60000);
+}
+
+// ── Firestore realtime ──
+function listenTickets() {
+  if (unsubscribe) unsubscribe();
+  unsubscribe = db.collection('tickets')
+    .orderBy('criadoEm', 'desc')
+    .onSnapshot(snap => {
+      tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      applyFilters();
+      checkDeadlines();
+    }, err => {
+      document.getElementById('table-area').innerHTML =
+        `<div class="empty"><i class="ti ti-wifi-off"></i><b>Erro de conexão</b><p>${err.message}</p></div>`;
+    });
+}
+
+// ── CRUD ──
+async function createTicket() {
+  const sala     = document.getElementById('f-sala').value.trim();
+  const ticket   = document.getElementById('f-ticket').value.trim();
+  const analista = document.getElementById('f-analista').value.trim();
+  const horas    = parseInt(document.getElementById('f-horas').value) || 2;
+  const desc     = document.getElementById('f-desc').value.trim();
+  if (!sala || !ticket || !analista) { alert('Preencha sala, ticket e analista.'); return; }
+  await db.collection('tickets').add({
+    sala, ticket, analista, horas, desc,
+    status: 'idle', deadline: null, checkDeadline: null,
+    completedAt: null, notes: [],
+    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  toggleForm();
+  ['f-sala','f-ticket','f-analista','f-desc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-horas').value = 2;
+}
+
+async function updateTicket(id, data) {
+  await db.collection('tickets').doc(id).update(data);
+}
+
+async function deleteTicket(id) {
+  if (!confirm('Remover este ticket?')) return;
+  if (selId === id) selId = null;
+  await db.collection('tickets').doc(id).delete();
+}
+
+async function startMaint(id) {
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  const deadline = Date.now() + t.horas * 3600000;
+  await updateTicket(id, { status: 'maint', deadline, completedAt: null });
+}
+
+async function requestCheck(id) {
+  const checkDeadline = Date.now() + 3600000;
+  await updateTicket(id, { status: 'check', checkDeadline });
+}
+
+async function markDone(id) {
+  await updateTicket(id, { status: 'done', deadline: null, checkDeadline: null, completedAt: new Date().toLocaleString('pt-BR') });
+}
+
+async function updateHoras(id, val) {
+  const h = Math.max(1, parseInt(val) || 1);
+  const t = tickets.find(x => x.id === id);
+  const updates = { horas: h };
+  if (t?.status === 'maint' && t.deadline) {
+    const elapsed = Date.now() - (t.deadline - t.horas * 3600000);
+    updates.deadline = Date.now() - elapsed + h * 3600000;
+  }
+  await updateTicket(id, updates);
+}
+
+async function addNote(id) {
+  if (!noteInput.trim()) return;
+  const t = tickets.find(x => x.id === id);
+  const user = auth.currentUser;
+  const note = {
+    text: noteInput.trim(),
+    analista: user?.displayName?.split(' ')[0] || t?.analista || 'Analista',
+    time: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  };
+  const notes = [note, ...(t?.notes || [])];
+  await updateTicket(id, { notes });
+  noteInput = '';
+  const el = document.getElementById('note-inp');
+  if (el) el.value = '';
+}
+
+// ── Filters ──
+function applyFilters() {
+  const q  = document.getElementById('search')?.value.toLowerCase() || '';
+  const st = document.getElementById('filter-status')?.value || '';
+  const an = document.getElementById('filter-analyst')?.value || '';
+
+  filtered = tickets.filter(t => {
+    if (st && t.status !== st) return false;
+    if (an && t.analista !== an) return false;
+    if (q && ![t.sala, t.ticket, t.analista, t.desc].some(v => v?.toLowerCase().includes(q))) return false;
+    return true;
+  });
+
+  const analysts = [...new Set(tickets.map(t => t.analista).filter(Boolean))].sort();
+  const sel = document.getElementById('filter-analyst');
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos os analistas</option>' +
+      analysts.map(a => `<option${a === cur ? ' selected' : ''}>${a}</option>`).join('');
+  }
+
+  renderMetrics();
+  renderTable();
+  renderDetail();
+}
+
+// ── Time helpers ──
+function timeLeft(deadline) {
+  if (!deadline) return null;
+  const diff = deadline - Date.now();
+  const abs  = Math.abs(diff);
+  return { h: Math.floor(abs / 3600000), m: Math.floor((abs % 3600000) / 60000), late: diff < 0, diff };
+}
+
+function cdHtml(t) {
+  let d = null;
+  if (t.status === 'maint' && t.deadline)      d = timeLeft(t.deadline);
+  if (t.status === 'check' && t.checkDeadline) d = timeLeft(t.checkDeadline);
+  if (!d) return '—';
+  const cls = d.late ? 'cd-late' : d.diff < 3600000 ? 'cd-warn' : 'cd-ok';
+  const icon = t.status === 'check' ? '<i class="ti ti-eye" style="font-size:11px"></i> ' : '';
+  return `<span class="cd ${cls}">${icon}${d.late ? '+' : ''}${d.h}h${String(d.m).padStart(2,'0')}m${d.late ? ' atrasado' : ''}</span>`;
+}
+
+function pillHtml(s) {
+  const map = { idle: ['pill-idle','Aguardando'], maint: ['pill-maint','Em manutenção'], check: ['pill-check','Check pendente'], done: ['pill-done','Concluída'] };
+  const [cls, lbl] = map[s] || map.idle;
+  return `<span class="pill ${cls}">${lbl}</span>`;
+}
+
+// ── Render metrics ──
+function renderMetrics() {
+  const maint = tickets.filter(t => t.status === 'maint').length;
+  const check = tickets.filter(t => t.status === 'check').length;
+  const done  = tickets.filter(t => t.status === 'done').length;
+  const late  = tickets.filter(t =>
+    (t.status === 'maint' && t.deadline && t.deadline < Date.now()) ||
+    (t.status === 'check' && t.checkDeadline && t.checkDeadline < Date.now())
+  ).length;
+
+  document.getElementById('metrics').innerHTML = `
+    <div class="metric"><div class="metric-val">${tickets.length}</div><div class="metric-lbl">tickets</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--warning)">${maint}</div><div class="metric-lbl">em manutenção</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--accent)">${check}</div><div class="metric-lbl">check pendente</div></div>
+    <div class="metric"><div class="metric-val" style="color:var(--success)">${done}</div><div class="metric-lbl">concluídas</div></div>
+    <div class="metric"><div class="metric-val" style="color:${late > 0 ? 'var(--danger)' : 'var(--success)'}">${late}</div><div class="metric-lbl">atrasadas</div></div>
+  `;
+
+  const banner = document.getElementById('alert-banner');
+  const atext  = document.getElementById('alert-text');
+  if (late > 0) {
+    banner.style.display = 'flex';
+    atext.textContent = `${late} sala${late > 1 ? 's com prazos vencidos' : ' com prazo vencido'} — verifique imediatamente.`;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+// ── Render table ──
+function renderTable() {
+  const area = document.getElementById('table-area');
+  if (tickets.length === 0) {
+    area.innerHTML = `<div class="empty"><i class="ti ti-door"></i><b>Nenhum ticket aberto</b><p>Clique em "Novo ticket" para o analista registrar uma sala.</p></div>`;
+    return;
+  }
+  if (filtered.length === 0) {
+    area.innerHTML = `<div class="empty"><i class="ti ti-search"></i><b>Nenhuma sala encontrada</b><p>Tente outros filtros.</p></div>`;
+    return;
+  }
+  const rows = filtered.slice(0, 100).map(t => `
+    <tr class="data-row${selId === t.id ? ' sel' : ''}" onclick="selectTicket('${t.id}')">
+      <td style="font-weight:600;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.sala}</td>
+      <td style="color:var(--text3);font-size:12px">${t.ticket}</td>
+      <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.analista}</td>
+      <td>${pillHtml(t.status)}</td>
+      <td>${cdHtml(t)}</td>
+      <td style="color:var(--text3);font-size:12px">${t.notes?.length || '—'}</td>
+      <td><button class="btn btn-sm" onclick="event.stopPropagation();deleteTicket('${t.id}')" title="Remover"><i class="ti ti-trash"></i></button></td>
+    </tr>`).join('');
+
+  const extra = filtered.length > 100 ? `<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:.75rem;font-size:12px">+${filtered.length - 100} tickets — refine a busca</td></tr>` : '';
+  area.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Sala</th><th>Ticket</th><th>Analista</th><th>Status</th><th>Tempo</th><th>Notas</th><th></th></tr></thead>
+        <tbody>${rows}${extra}</tbody>
+      </table>
+    </div>
+    <p style="font-size:11px;color:var(--text3);margin-top:6px">${filtered.length} de ${tickets.length} ticket${tickets.length !== 1 ? 's' : ''} · clique para gerenciar</p>`;
+}
+
+// ── Render detail ──
+function renderDetail() {
+  const area = document.getElementById('detail-area');
+  const t = selId ? tickets.find(x => x.id === selId) : null;
+  if (!t) { area.innerHTML = ''; return; }
+
+  const tl   = t.deadline ? timeLeft(t.deadline) : null;
+  const pct  = t.status === 'maint' && t.deadline
+    ? Math.min(100, Math.round(((t.horas * 3600000 - (t.deadline - Date.now())) / (t.horas * 3600000)) * 100))
+    : 0;
+  const barColor = tl ? (tl.late ? 'var(--danger)' : tl.diff < 3600000 ? 'var(--warning)' : 'var(--success)') : 'var(--accent)';
+
+  const notesHtml = t.notes?.length
+    ? t.notes.map(n => `<div class="note-item">${n.text}<div class="note-meta"><i class="ti ti-user" style="font-size:11px"></i> ${n.analista} · ${n.time}</div></div>`).join('')
+    : `<p style="font-size:12px;color:var(--text3)">Nenhuma anotação ainda.</p>`;
+
+  const teamsMsg = gerarMensagemTeams(t);
+
+  area.innerHTML = `
+    <div class="detail">
+      <div class="detail-header">
+        <div>
+          <div class="detail-title"><i class="ti ti-door" style="margin-right:5px"></i>${t.sala}</div>
+          <div class="detail-sub">${t.ticket} · ${t.analista} ${t.criadoEm?.toDate ? '· aberto em ' + t.criadoEm.toDate().toLocaleString('pt-BR') : ''}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          ${pillHtml(t.status)}
+          ${cdHtml(t) !== '—' ? cdHtml(t) : ''}
+          <button class="btn btn-sm" onclick="selId=null;renderDetail()" title="Fechar"><i class="ti ti-x"></i></button>
+        </div>
+      </div>
+
+      ${t.status === 'maint' && t.deadline ? `
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text3);margin-bottom:3px">
+          <span>Progresso da manutenção</span><span>${pct}%</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%;background:${barColor}"></div></div>` : ''}
+
+      ${t.desc ? `<div style="background:var(--surface2);border-radius:var(--radius);padding:9px 12px;font-size:13px;color:var(--text2);margin-bottom:1rem">${t.desc}</div>` : ''}
+
+      <div style="display:flex;gap:12px;margin-bottom:1rem;flex-wrap:wrap;align-items:flex-end">
+        <div class="field" style="margin:0">
+          <label>Tempo de manutenção (h)</label>
+          <input type="number" min="1" max="24" value="${t.horas}" onchange="updateHoras('${t.id}',this.value)" style="width:80px">
+        </div>
+        <p style="font-size:12px;color:var(--text3);padding-bottom:6px">Alerta dispara ao vencer o prazo</p>
+      </div>
+
+      <div class="action-row">
+        ${t.status === 'idle'  ? `<button class="btn btn-primary" onclick="startMaint('${t.id}')"><i class="ti ti-tool"></i> Iniciar manutenção</button>` : ''}
+        ${t.status === 'maint' ? `<button class="btn" onclick="requestCheck('${t.id}')"><i class="ti ti-eye"></i> Solicitar check</button>` : ''}
+        ${t.status !== 'done'  ? `<button class="btn btn-success" onclick="markDone('${t.id}')"><i class="ti ti-circle-check"></i> Reativar sala</button>` : ''}
+        ${t.completedAt ? `<span style="font-size:12px;color:var(--success);align-self:center"><i class="ti ti-check"></i> Reativada em ${t.completedAt}</span>` : ''}
+      </div>
+
+      <hr class="divider">
+
+      <div style="font-weight:600;font-size:13px;margin-bottom:8px"><i class="ti ti-notes" style="margin-right:5px"></i>Anotações do analista</div>
+      <div class="note-input-row" style="margin-bottom:10px">
+        <input id="note-inp" type="text" placeholder="Registrar observação ou anotação…"
+          oninput="noteInput=this.value"
+          onkeydown="if(event.key==='Enter')addNote('${t.id}')">
+        <button class="btn btn-primary btn-sm" onclick="addNote('${t.id}')"><i class="ti ti-send"></i></button>
+      </div>
+      <div class="notes-list">${notesHtml}</div>
+
+      <hr class="divider">
+
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px"><i class="ti ti-brand-teams" style="margin-right:5px"></i>Mensagem para o Teams</div>
+      <p style="font-size:12px;color:var(--text3);margin-bottom:6px">Copie e cole no canal de suporte para avisar o time.</p>
+      <div class="teams-box">${teamsMsg}</div>
+      <button class="btn btn-sm" style="margin-top:8px" onclick="copyTeams('${t.id}')"><i class="ti ti-copy"></i> Copiar mensagem</button>
+    </div>`;
+}
+
+function selectTicket(id) {
+  selId = selId === id ? null : id;
+  renderTable();
+  renderDetail();
+  if (selId) setTimeout(() => document.getElementById('detail-area')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100);
+}
+
+// ── Teams message ──
+function gerarMensagemTeams(t) {
+  const status = { idle: 'Aguardando', maint: 'Em manutenção', check: 'Check pendente', done: 'Concluída' };
+  const tl = t.deadline ? timeLeft(t.deadline) : null;
+  const prazo = tl ? (tl.late ? `⚠️ ATRASADO ${tl.h}h${String(tl.m).padStart(2,'0')}m` : `${tl.h}h${String(tl.m).padStart(2,'0')}m restantes`) : '—';
+  return `🔔 Atualização — Meeting Room\n\n` +
+    `📍 Sala: ${t.sala}\n` +
+    `🎫 Ticket: ${t.ticket}\n` +
+    `👤 Analista: ${t.analista}\n` +
+    `📊 Status: ${status[t.status] || t.status}\n` +
+    `⏱️ Prazo: ${prazo}\n` +
+    (t.desc ? `📝 Descrição: ${t.desc}\n` : '') +
+    (t.notes?.length ? `\n💬 Última nota: ${t.notes[0].text} (${t.notes[0].analista} · ${t.notes[0].time})` : '');
+}
+
+function copyTeams(id) {
+  const t = tickets.find(x => x.id === id);
+  if (!t) return;
+  navigator.clipboard.writeText(gerarMensagemTeams(t)).then(() => {
+    const btn = event.target.closest('button');
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<i class="ti ti-check"></i> Copiado!';
+    setTimeout(() => btn.innerHTML = orig, 2000);
+  });
+}
+
+// ── Form toggle ──
+function toggleForm() {
+  const fc = document.getElementById('form-card');
+  fc.style.display = fc.style.display === 'none' ? 'block' : 'none';
+  if (fc.style.display === 'block') document.getElementById('f-sala')?.focus();
+}
+
+// ── Notifications ──
+function checkNotifPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    document.getElementById('notif-bar').style.display = 'flex';
+  }
+}
+
+async function requestNotifPermission() {
+  if (!('Notification' in window)) { alert('Seu navegador não suporta notificações.'); return; }
+  const result = await Notification.requestPermission();
+  document.getElementById('notif-bar').style.display = 'none';
+  document.getElementById('notif-icon').style.display = 'none';
+  if (result !== 'granted') alert('Notificações bloqueadas. Habilite nas configurações do navegador.');
+}
+
+function checkDeadlines() {
+  if (!tickets.length) return;
+  const now = Date.now();
+  tickets.forEach(t => {
+    if (t.status === 'maint' && t.deadline && t.deadline < now) {
+      sendNotif(`⚠️ Prazo vencido — ${t.sala}`, `Ticket ${t.ticket} · Analista: ${t.analista}. A manutenção deveria ter sido concluída.`, `late-${t.id}`);
+    }
+    if (t.status === 'maint' && t.deadline && t.deadline - now > 0 && t.deadline - now < 600000) {
+      sendNotif(`⏱️ Prazo em 10 min — ${t.sala}`, `Ticket ${t.ticket} · Analista: ${t.analista}.`, `soon-${t.id}`);
+    }
+    if (t.status === 'check' && t.checkDeadline && t.checkDeadline < now) {
+      sendNotif(`👁️ Check não realizado — ${t.sala}`, `Ticket ${t.ticket} · Analista: ${t.analista}.`, `check-${t.id}`);
+    }
+  });
+}
+
+function sendNotif(title, body, tag) {
+  if (Notification.permission !== 'granted') return;
+  if (swReg) {
+    swReg.active?.postMessage({ type: 'NOTIFY', title, body, tag });
+  } else {
+    new Notification(title, { body, tag, requireInteraction: true });
+  }
+}
+
+// ── Service Worker ──
+async function registerSW() {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    swReg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+    navigator.serviceWorker.addEventListener('message', e => {
+      if (e.data?.type === 'CHECK_DEADLINES') checkDeadlines();
+    });
+    swReg = await navigator.serviceWorker.ready;
+    (swReg.active || swReg.waiting || swReg.installing)?.postMessage({ type: 'START_WORKER' });
+  } catch (e) {
+    console.warn('Service Worker não registrado:', e);
+  }
+}
+</script>
+</body>
+</html>
