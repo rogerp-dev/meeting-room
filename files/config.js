@@ -8,12 +8,13 @@
 // ─────────────────────────────────────────────────────────────
 
 const FIREBASE_CONFIG = {
-  apiKey:            "COLE_AQUI",
-  authDomain:        "COLE_AQUI",
-  projectId:         "COLE_AQUI",
-  storageBucket:     "COLE_AQUI",
-  messagingSenderId: "COLE_AQUI",
-  appId:             "COLE_AQUI"
+  apiKey:            "AIzaSyDhRPwFVv1hgqPVte6_qP7dk7ZCy_ht4Os",
+  authDomain:        "meeting-room-cb5f6.firebaseapp.com",
+  projectId:         "meeting-room-cb5f6",
+  storageBucket:     "meeting-room-cb5f6.firebasestorage.app",
+  messagingSenderId: "363043037542",
+  appId:             "1:363043037542:web:813933137d7ab2747768a7",
+  measurementId:     "G-DS7MSH6PXE"
 };
 
 window.FIREBASE_CONFIG = FIREBASE_CONFIG;
